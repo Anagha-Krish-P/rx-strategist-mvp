@@ -1,11 +1,6 @@
-import os
 from google import genai
-from google.colab import userdata
 from google.genai import types
 from rx_strategist.models.prescription import ExtractedPrescription
-
-api_key = userdata.get("GEMINI_API_KEY")
-client = genai.Client(api_key=api_key)
 
 SYSTEM_PROMPT = """
 You are a prescription information extraction system.
@@ -32,9 +27,16 @@ PO -> oral
 Extract only information present in the input.
 """
 
-def extract_prescription(text):
-    response = client.models.generate_content(
-        model="models/gemini-3.5-flash-lite",
+class GeminiPrescriptionExtractor:
+    def __init__(self, api_key: str, model: str = "models/gemini-3.5-flash-lite"):
+        if not api_key:
+            raise ValueError("A Gemini API key is required.")
+        self.client = genai.Client(api_key=api_key)
+        self.model = model
+
+    def extract_prescription(self, text: str) -> ExtractedPrescription:
+        response = self.client.models.generate_content(
+            model=self.model,
         contents=f"""
 {SYSTEM_PROMPT}
 
@@ -46,7 +48,5 @@ Prescription text:
             response_mime_type="application/json",
             response_schema=ExtractedPrescription
         )
-    )
-    return ExtractedPrescription.model_validate_json(
-        response.text
-    )
+        )
+        return ExtractedPrescription.model_validate_json(response.text)

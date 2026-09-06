@@ -1,1 +1,11 @@
-venv/\n.env\n__pycache__/\n*.pyc
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.env
+.env.*
+.pytest_cache/
+venv/
+.venv/
+env/
+ENV/
+.DS_Store
