@@ -1,11 +1,12 @@
 # rx-strategist-mvp
 
-A small prescription verification prototype with two completed stages:
+A small prescription verification prototype with three completed stages:
 
-- deterministic indication, dosage, interaction, and prescription verification
+- Gemini Vision OCR of prescription images into text
 - Gemini extraction of structured prescription information
+- deterministic indication, dosage, interaction, and prescription verification
 
-Gemini only extracts and normalizes prescription text. Medical decisions are made by the deterministic verification engine.
+OCR only transcribes visible prescription text. Gemini only extracts and normalizes that text. Medical decisions are made by the deterministic verification engine.
 
 ## Local setup
 
@@ -18,4 +19,9 @@ pytest
 
 ## Google Colab
 
-The end-to-end flow is demonstrated in `notebooks/rx_strategist_demo.ipynb`. Add `GEMINI_API_KEY` to Colab Secrets, clone the repository, install the requirements, add `src` to `sys.path`, then run the notebook cells.
+Add `GEMINI_API_KEY` to Colab Secrets, then open one of the demo notebooks:
+
+- `notebooks/rx_strategist_demo.ipynb` — paste prescription text, extract, and verify
+- `notebooks/rx_strategist_ocr_demo.ipynb` — OCR a prescription image (bundled sample or your own upload), extract, and verify
+
+Clone the repository, install the requirements, add `src` to `sys.path`, then run the notebook cells.
