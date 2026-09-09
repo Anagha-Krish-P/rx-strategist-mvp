@@ -1,0 +1,140 @@
+[
+  {
+    "id": "losartan_appropriate",
+    "description": "Losartan 50 mg once daily for hypertension.",
+    "expected_status": "APPROPRIATE",
+    "prescription": {
+      "patient": {
+        "age": 55,
+        "gender": "female",
+        "conditions": ["hypertension"],
+        "allergies": [],
+        "kidney_function": "normal"
+      },
+      "medications": [
+        {
+          "drug": "losartan",
+          "dose": "50 mg",
+          "frequency": "once daily",
+          "route": "oral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "metformin_appropriate",
+    "description": "Metformin 500 mg twice daily for type 2 diabetes.",
+    "expected_status": "APPROPRIATE",
+    "prescription": {
+      "patient": {
+        "age": 55,
+        "gender": "female",
+        "conditions": ["type 2 diabetes"],
+        "allergies": [],
+        "kidney_function": "normal"
+      },
+      "medications": [
+        {
+          "drug": "metformin",
+          "dose": "500 mg",
+          "frequency": "twice daily",
+          "route": "oral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "losartan_metformin_interaction",
+    "description": "Demo interaction between losartan and metformin requires REVIEW.",
+    "expected_status": "REVIEW",
+    "prescription": {
+      "patient": {
+        "age": 55,
+        "gender": "female",
+        "conditions": ["hypertension", "type 2 diabetes"],
+        "allergies": [],
+        "kidney_function": "normal"
+      },
+      "medications": [
+        {
+          "drug": "losartan",
+          "dose": "50 mg",
+          "frequency": "once daily",
+          "route": "oral"
+        },
+        {
+          "drug": "metformin",
+          "dose": "500 mg",
+          "frequency": "twice daily",
+          "route": "oral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "metformin_wrong_dose",
+    "description": "Metformin 1000 mg does not match the demo recommended dose.",
+    "expected_status": "REVIEW",
+    "prescription": {
+      "patient": {
+        "age": 55,
+        "gender": "female",
+        "conditions": ["type 2 diabetes"],
+        "allergies": [],
+        "kidney_function": "normal"
+      },
+      "medications": [
+        {
+          "drug": "metformin",
+          "dose": "1000 mg",
+          "frequency": "twice daily",
+          "route": "oral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "losartan_unmatched_indication",
+    "description": "Losartan prescribed without a matching indication.",
+    "expected_status": "REVIEW",
+    "prescription": {
+      "patient": {
+        "age": 40,
+        "gender": "male",
+        "conditions": ["asthma"],
+        "allergies": [],
+        "kidney_function": "normal"
+      },
+      "medications": [
+        {
+          "drug": "losartan",
+          "dose": "50 mg",
+          "frequency": "once daily",
+          "route": "oral"
+        }
+      ]
+    }
+  },
+  {
+    "id": "unknown_drug",
+    "description": "A drug missing from the demo knowledge base requires REVIEW.",
+    "expected_status": "REVIEW",
+    "prescription": {
+      "patient": {
+        "age": 60,
+        "gender": "female",
+        "conditions": ["hypertension"],
+        "allergies": [],
+        "kidney_function": "normal"
+      },
+      "medications": [
+        {
+          "drug": "amlodipine",
+          "dose": "5 mg",
+          "frequency": "once daily",
+          "route": "oral"
+        }
+      ]
+    }
+  }
+]
