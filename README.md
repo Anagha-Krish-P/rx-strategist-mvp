@@ -27,5 +27,6 @@ Add `GEMINI_API_KEY` to Colab Secrets when a notebook uses OCR or extraction, th
 - `notebooks/rx_strategist_demo.ipynb` — paste prescription text, extract, and verify
 - `notebooks/rx_strategist_ocr_demo.ipynb` — OCR a prescription image, extract, and verify
 - `notebooks/rx_strategist_pipeline_demo.ipynb` — RAG, knowledge graph, LangGraph workflow, final checker, and evaluation (Gemini optional)
+- `notebooks/rx_strategist_ocr_pipeline_demo.ipynb` — OCR a prescription image, then run the full LangGraph pipeline (Gemini required)
 
 Clone the repository, install the requirements, add `src` to `sys.path`, then run the notebook cells.
