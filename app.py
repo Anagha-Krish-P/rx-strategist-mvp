@@ -24,172 +24,83 @@ DISCLAIMER = (
 
 APP_CSS = """
 <style>
-  @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap");
+  @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
   html, body, [class*="stApp"] {
-    font-family: "Plus Jakarta Sans", sans-serif;
-    color: #0f172a;
+    font-family: "IBM Plex Sans", sans-serif;
+    color: #12263a;
   }
-  .stApp { background: #eef2f7; }
-  header[data-testid="stHeader"],
-  [data-testid="stToolbar"],
-  #MainMenu, footer { display: none !important; }
-  .block-container {
-    padding-top: 1.15rem;
-    padding-bottom: 2.75rem;
-    max-width: 1180px;
-  }
-  .rx-topbar {
+  .stApp { background: #f4f7fb; }
+  .block-container { padding-top: 1.4rem; max-width: 1180px; }
+  .rx-header {
     display: flex;
-    align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    background: #ffffff;
-    border: 1px solid #d7e2ee;
-    border-radius: 18px;
-    padding: 16px 20px;
-    margin-bottom: 18px;
-    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+    align-items: flex-end;
+    gap: 1rem;
+    margin-bottom: 1.4rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #d7e1ee;
   }
-  .rx-brand-row { display: flex; align-items: center; gap: 14px; }
-  .rx-mark {
-    width: 42px;
-    height: 42px;
-    border-radius: 12px;
-    background: linear-gradient(180deg, #12837a 0%, #0f766e 100%);
-    color: #fff;
-    font-weight: 800;
-    font-size: 0.95rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    letter-spacing: -0.04em;
-    flex-shrink: 0;
-  }
-  .rx-brand { font-size: 1.28rem; font-weight: 800; letter-spacing: -0.04em; color: #0b3b5a; line-height: 1.1; }
-  .rx-sub { color: #64748b; margin-top: 3px; font-size: 0.84rem; font-weight: 500; }
+  .rx-brand { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.03em; }
+  .rx-sub { color: #5b6b7c; margin-top: 0.2rem; font-size: 0.95rem; }
   .rx-ready {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: #f0fdfa;
-    color: #0f766e;
-    border: 1px solid #99f6e4;
+    background: #e8f6ee;
+    color: #17643b;
+    border: 1px solid #b7e0c6;
     border-radius: 999px;
-    padding: 8px 14px;
-    font-size: 0.78rem;
-    font-weight: 700;
-    white-space: nowrap;
+    padding: 0.4rem 0.85rem;
+    font-size: 0.82rem;
+    font-weight: 600;
   }
-  .rx-ready span {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #14b8a6;
-    box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.18);
-    display: inline-block;
-  }
-  div[data-testid="stHorizontalBlock"] { align-items: stretch !important; }
-  div[data-testid="stHorizontalBlock"] > div {
-    display: flex !important;
-    flex-direction: column;
-  }
-  [data-testid="stVerticalBlockBorderWrapper"] {
-    background: #ffffff;
-    border: 1px solid #d7e2ee !important;
-    border-radius: 18px !important;
-    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
-    flex: 1;
+  .rx-card {
+    background: #fff;
+    border: 1px solid #dce6f2;
+    border-radius: 16px;
+    padding: 1.15rem 1.2rem 1.25rem;
+    box-shadow: 0 8px 24px rgba(18, 38, 58, 0.04);
     height: 100%;
   }
-  .rx-kicker {
-    margin: 0 0 6px;
-    font-size: 0.7rem;
-    letter-spacing: 0.12em;
-    font-weight: 800;
-    color: #0f766e;
-  }
-  .rx-section-title {
-    margin: 0 0 14px;
-    font-size: 1.05rem;
-    color: #0b3b5a;
-    font-weight: 800;
-  }
-  .rx-hint { color: #64748b; font-size: 0.78rem; margin-top: 6px; }
-  .rx-preview img {
-    max-height: 220px;
-    object-fit: contain;
-    border-radius: 10px;
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
-  }
-  [data-testid="stImageCaption"] { color: #64748b !important; font-size: 0.75rem !important; }
+  .rx-card h3 { margin: 0 0 0.85rem; font-size: 1.02rem; }
+  .rx-hint { color: #6b7c8d; font-size: 0.82rem; margin-top: 0.45rem; }
   .status-low, .status-review, .status-unknown {
-    border-radius: 18px;
-    padding: 18px 22px;
-    border: 1px solid transparent;
-    margin: 8px 0 16px;
-  }
-  .status-low { background: #f0fdfa; border-color: #99f6e4; border-left: 5px solid #0f766e; }
-  .status-review { background: #fff7ed; border-color: #fed7aa; border-left: 5px solid #b45309; }
-  .status-unknown { background: #f8fafc; border-color: #e2e8f0; border-left: 5px solid #64748b; }
-  .status-kicker {
-    font-size: 0.7rem;
-    letter-spacing: 0.12em;
-    font-weight: 800;
-    color: #64748b;
-    margin-bottom: 6px;
-  }
-  .status-title { font-size: 1.45rem; font-weight: 800; margin: 0; color: #0b3b5a; }
-  .status-low .status-title { color: #0f766e; }
-  .status-review .status-title { color: #b45309; }
-  .status-copy { margin: 6px 0 0; color: #475569; }
-  .metric-card {
-    background: #ffffff;
-    border: 1px solid #d7e2ee;
     border-radius: 16px;
-    padding: 16px;
-    min-height: 96px;
-    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+    padding: 1.2rem 1.3rem;
+    border: 1px solid transparent;
   }
-  .metric-label { font-size: 0.75rem; color: #64748b; font-weight: 700; }
-  .metric-value { font-size: 1.85rem; font-weight: 800; color: #0b3b5a; margin-top: 6px; line-height: 1; }
+  .status-low { background: #e9f7ef; border-color: #b7e0c6; }
+  .status-review { background: #fff6e5; border-color: #f0d39a; }
+  .status-unknown { background: #eef2f6; border-color: #d4dde7; }
+  .status-kicker {
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: #5b6b7c;
+    margin-bottom: 0.25rem;
+  }
+  .status-title { font-size: 1.45rem; font-weight: 700; margin: 0; }
+  .status-copy { margin: 0.35rem 0 0; color: #334155; }
   .finding {
     background: #fff;
-    border: 1px solid #e2e8f0;
-    border-left: 4px solid #b45309;
-    border-radius: 12px;
-    padding: 14px 16px;
-    margin-bottom: 10px;
+    border: 1px solid #e3ebf4;
+    border-left: 4px solid #c9a227;
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.7rem;
   }
   .kg-line {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.84rem;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 8px 12px;
-    margin-bottom: 6px;
-    color: #0b3b5a;
+    font-size: 0.86rem;
+    background: #f7fafc;
+    border-radius: 8px;
+    padding: 0.45rem 0.7rem;
+    margin-bottom: 0.35rem;
   }
   .disclaimer {
-    color: #64748b;
-    font-size: 0.82rem;
-    margin-top: 22px;
-    padding-top: 14px;
-    border-top: 1px solid #d7e2ee;
+    color: #5b6b7c;
+    font-size: 0.84rem;
+    margin-top: 1.5rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid #d7e1ee;
   }
-  div[data-testid="stButton"] > button {
-    background: #0f766e;
-    border: 1px solid #0f766e;
-    height: 2.8rem;
-    font-weight: 700;
-    border-radius: 12px;
-  }
-  div[data-testid="stButton"] > button:hover {
-    background: #115e59;
-    border-color: #115e59;
-  }
-  [data-testid="stFileUploaderDropzone"] { border-radius: 12px !important; }
 </style>
 """
 
@@ -264,18 +175,6 @@ def _analyze(image_bytes: bytes, image_name: str, overrides: dict):
             Path(tmp_path).unlink(missing_ok=True)
 
 
-def _metric_card(label: str, value) -> None:
-    st.markdown(
-        f"""
-        <div class="metric-card">
-          <div class="metric-label">{label}</div>
-          <div class="metric-value">{value}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 def _render_findings(title: str, items: list):
     if not items:
         return
@@ -304,18 +203,14 @@ def main():
     )
     st.markdown(APP_CSS, unsafe_allow_html=True)
     _init_state()
-
     st.markdown(
         """
-        <div class="rx-topbar">
-          <div class="rx-brand-row">
-            <div class="rx-mark">Rx</div>
-            <div>
-              <div class="rx-brand">Rx-Strategist</div>
-              <div class="rx-sub">AI-assisted Prescription Safety Analysis</div>
-            </div>
+        <div class="rx-header">
+          <div>
+            <div class="rx-brand">Rx-Strategist</div>
+            <div class="rx-sub">AI-assisted Prescription Safety Analysis</div>
           </div>
-          <div class="rx-ready"><span></span>System Status: Ready</div>
+          <div class="rx-ready">System Status: Ready</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -323,63 +218,51 @@ def main():
 
     left, right = st.columns(2, gap="large")
     with left:
-        with st.container(border=True):
-            st.markdown('<p class="rx-kicker">INTAKE</p>', unsafe_allow_html=True)
-            st.markdown('<p class="rx-section-title">Patient Profile</p>', unsafe_allow_html=True)
-            age = st.number_input("Age", min_value=0, max_value=120, value=55, step=1)
-            conditions_raw = st.text_input(
-                "Medical Conditions",
-                value="hypertension, type 2 diabetes",
-                help="Comma-separated. Used by indication matching.",
-            )
-            allergies_raw = st.text_input(
-                "Known Allergies",
-                value="",
-                help="Comma-separated. Matched against prescribed drug names.",
-            )
+        st.markdown('<div class="rx-card"><h3>Patient Profile</h3>', unsafe_allow_html=True)
+        age = st.number_input("Age", min_value=0, max_value=120, value=55, step=1)
+        conditions_raw = st.text_input(
+            "Medical Conditions",
+            value="hypertension, type 2 diabetes",
+            help="Comma-separated. Used by indication matching.",
+        )
+        allergies_raw = st.text_input(
+            "Known Allergies",
+            value="",
+            help="Comma-separated. Matched against prescribed drug names.",
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
 
     with right:
-        with st.container(border=True):
-            st.markdown('<p class="rx-kicker">DOCUMENT</p>', unsafe_allow_html=True)
-            st.markdown('<p class="rx-section-title">Prescription</p>', unsafe_allow_html=True)
-            upload = st.file_uploader(
-                "Upload Prescription",
-                type=["jpg", "jpeg", "png", "webp"],
-                accept_multiple_files=False,
-            )
-            st.markdown(
-                '<div class="rx-hint">Supported: JPG / PNG / WebP</div>',
-                unsafe_allow_html=True,
-            )
-            if upload is not None:
-                current_id = _file_id(upload)
-                upload_state = next_upload_state(st.session_state.file_id, current_id)
-                st.session_state.file_id = upload_state["file_id"]
-                st.session_state.image_bytes = upload.getvalue()
-                st.session_state.image_name = upload.name
-                if upload_state["invalidate_result"]:
-                    st.session_state.result = None
-                    st.session_state.view = None
-                    st.session_state.error = None
-                st.image(
-                    st.session_state.image_bytes,
-                    caption=upload.name,
-                    use_container_width=True,
-                )
-            else:
-                st.session_state.file_id = None
-                st.session_state.image_bytes = None
-                st.session_state.image_name = None
-                st.session_state.result = None
-                st.session_state.view = None
+        st.markdown('<div class="rx-card"><h3>Prescription</h3>', unsafe_allow_html=True)
+        upload = st.file_uploader(
+            "Upload Prescription",
+            type=["jpg", "jpeg", "png", "webp"],
+            accept_multiple_files=False,
+        )
+        st.markdown(
+            '<div class="rx-hint">Supported: JPG / PNG / WebP</div></div>',
+            unsafe_allow_html=True,
+        )
 
-    with st.container(border=True):
-        notice, action = st.columns([2.4, 1], vertical_alignment="center")
-        with notice:
-            st.caption("Review patient details, then run analysis. Findings are assistive only.")
-        with action:
-            analyze = st.button("Analyze Prescription", type="primary", use_container_width=True)
+    if upload is not None:
+        current_id = _file_id(upload)
+        upload_state = next_upload_state(st.session_state.file_id, current_id)
+        st.session_state.file_id = upload_state["file_id"]
+        st.session_state.image_bytes = upload.getvalue()
+        st.session_state.image_name = upload.name
+        if upload_state["invalidate_result"]:
+            st.session_state.result = None
+            st.session_state.view = None
+            st.session_state.error = None
+        st.image(st.session_state.image_bytes, caption=upload.name, use_container_width=True)
+    else:
+        st.session_state.file_id = None
+        st.session_state.image_bytes = None
+        st.session_state.image_name = None
+        st.session_state.result = None
+        st.session_state.view = None
 
+    analyze = st.button("Analyze Prescription", type="primary", use_container_width=True)
     if analyze:
         if not st.session_state.image_bytes:
             _user_error("Upload a prescription image before analyzing.")
@@ -414,20 +297,15 @@ def main():
         unsafe_allow_html=True,
     )
 
-    m1, m2, m3, m4 = st.columns(4, gap="medium")
+    m1, m2, m3, m4 = st.columns(4)
     metrics = view["metrics"]
-    with m1:
-        _metric_card("Medicines Identified", metrics["medicines"])
-    with m2:
-        _metric_card("Potential Interactions", metrics["interactions"])
-    with m3:
-        _metric_card("Patient Risks", metrics["patient_risks"])
-    with m4:
-        _metric_card("Evidence Items", metrics["evidence"])
+    m1.metric("Medicines Identified", metrics["medicines"])
+    m2.metric("Potential Interactions", metrics["interactions"])
+    m3.metric("Patient Risks", metrics["patient_risks"])
+    m4.metric("Evidence Items", metrics["evidence"])
 
-    with st.container(border=True):
-        st.subheader("Medicines")
-        st.dataframe(view["medicines"], use_container_width=True, hide_index=True)
+    st.subheader("Medicines")
+    st.dataframe(view["medicines"], use_container_width=True, hide_index=True)
 
     st.subheader("Safety Findings")
     findings = view["findings"]
