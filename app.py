@@ -24,172 +24,125 @@ DISCLAIMER = (
 
 APP_CSS = """
 <style>
-  @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap");
+  @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
   html, body, [class*="stApp"] {
-    font-family: "Plus Jakarta Sans", sans-serif;
+    font-family: "IBM Plex Sans", sans-serif;
     color: #0f172a;
   }
-  .stApp { background: #eef2f7; }
+  .stApp { background: #f0f3f8; }
   header[data-testid="stHeader"],
   [data-testid="stToolbar"],
   #MainMenu, footer { display: none !important; }
   .block-container {
-    padding-top: 1.15rem;
-    padding-bottom: 2.75rem;
-    max-width: 1180px;
+    padding-top: 1.5rem;
+    padding-bottom: 2.5rem;
+    max-width: 1120px;
   }
-  .rx-topbar {
+  .rx-header-wrap {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    background: #ffffff;
-    border: 1px solid #d7e2ee;
-    border-radius: 18px;
-    padding: 16px 20px;
-    margin-bottom: 18px;
-    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+    min-height: 72px;
+    padding-bottom: 1rem;
+    margin-bottom: 0.4rem;
+    border-bottom: 1px solid #d8e0ea;
   }
-  .rx-brand-row { display: flex; align-items: center; gap: 14px; }
-  .rx-mark {
-    width: 42px;
-    height: 42px;
-    border-radius: 12px;
-    background: linear-gradient(180deg, #12837a 0%, #0f766e 100%);
-    color: #fff;
-    font-weight: 800;
-    font-size: 0.95rem;
+  .rx-brand { font-size: 1.65rem; font-weight: 700; letter-spacing: -0.03em; color: #0b3b5a; line-height: 1.15; }
+  .rx-sub { color: #64748b; margin-top: 0.2rem; font-size: 0.92rem; }
+  .rx-ready-wrap {
     display: flex;
     align-items: center;
-    justify-content: center;
-    letter-spacing: -0.04em;
-    flex-shrink: 0;
+    justify-content: flex-end;
+    min-height: 72px;
   }
-  .rx-brand { font-size: 1.28rem; font-weight: 800; letter-spacing: -0.04em; color: #0b3b5a; line-height: 1.1; }
-  .rx-sub { color: #64748b; margin-top: 3px; font-size: 0.84rem; font-weight: 500; }
   .rx-ready {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: #f0fdfa;
+    background: #ecfdf8;
     color: #0f766e;
     border: 1px solid #99f6e4;
     border-radius: 999px;
-    padding: 8px 14px;
-    font-size: 0.78rem;
-    font-weight: 700;
+    padding: 0.45rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
     white-space: nowrap;
-  }
-  .rx-ready span {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #14b8a6;
-    box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.18);
-    display: inline-block;
-  }
-  div[data-testid="stHorizontalBlock"] { align-items: stretch !important; }
-  div[data-testid="stHorizontalBlock"] > div {
-    display: flex !important;
-    flex-direction: column;
   }
   [data-testid="stVerticalBlockBorderWrapper"] {
     background: #ffffff;
-    border: 1px solid #d7e2ee !important;
-    border-radius: 18px !important;
-    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
-    flex: 1;
-    height: 100%;
-  }
-  .rx-kicker {
-    margin: 0 0 6px;
-    font-size: 0.7rem;
-    letter-spacing: 0.12em;
-    font-weight: 800;
-    color: #0f766e;
+    border: 1px solid #d8e0ea !important;
+    border-radius: 16px !important;
+    box-shadow: 0 10px 28px rgba(11, 59, 90, 0.05);
   }
   .rx-section-title {
-    margin: 0 0 14px;
-    font-size: 1.05rem;
+    margin: 0 0 0.75rem;
+    font-size: 1.02rem;
     color: #0b3b5a;
-    font-weight: 800;
+    font-weight: 650;
   }
-  .rx-hint { color: #64748b; font-size: 0.78rem; margin-top: 6px; }
-  .rx-preview img {
-    max-height: 220px;
-    object-fit: contain;
-    border-radius: 10px;
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
-  }
-  [data-testid="stImageCaption"] { color: #64748b !important; font-size: 0.75rem !important; }
+  .rx-hint { color: #64748b; font-size: 0.8rem; margin-top: 0.35rem; }
+  .rx-preview img { max-height: 280px; object-fit: contain; }
   .status-low, .status-review, .status-unknown {
-    border-radius: 18px;
-    padding: 18px 22px;
+    border-radius: 16px;
+    padding: 1.15rem 1.25rem;
     border: 1px solid transparent;
-    margin: 8px 0 16px;
+    margin: 0.4rem 0 0.85rem;
   }
-  .status-low { background: #f0fdfa; border-color: #99f6e4; border-left: 5px solid #0f766e; }
-  .status-review { background: #fff7ed; border-color: #fed7aa; border-left: 5px solid #b45309; }
-  .status-unknown { background: #f8fafc; border-color: #e2e8f0; border-left: 5px solid #64748b; }
+  .status-low { background: #ecfdf8; border-color: #5eead4; }
+  .status-review { background: #fff7ed; border-color: #fdba74; }
+  .status-unknown { background: #f1f5f9; border-color: #cbd5e1; }
   .status-kicker {
-    font-size: 0.7rem;
-    letter-spacing: 0.12em;
-    font-weight: 800;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    font-weight: 700;
     color: #64748b;
-    margin-bottom: 6px;
+    margin-bottom: 0.3rem;
   }
-  .status-title { font-size: 1.45rem; font-weight: 800; margin: 0; color: #0b3b5a; }
+  .status-title { font-size: 1.4rem; font-weight: 700; margin: 0; color: #0b3b5a; }
   .status-low .status-title { color: #0f766e; }
   .status-review .status-title { color: #b45309; }
-  .status-copy { margin: 6px 0 0; color: #475569; }
+  .status-copy { margin: 0.35rem 0 0; color: #334155; }
   .metric-card {
     background: #ffffff;
-    border: 1px solid #d7e2ee;
-    border-radius: 16px;
-    padding: 16px;
-    min-height: 96px;
-    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+    border: 1px solid #d8e0ea;
+    border-radius: 14px;
+    padding: 0.95rem 1rem;
+    min-height: 92px;
+    box-shadow: 0 8px 20px rgba(11, 59, 90, 0.04);
   }
-  .metric-label { font-size: 0.75rem; color: #64748b; font-weight: 700; }
-  .metric-value { font-size: 1.85rem; font-weight: 800; color: #0b3b5a; margin-top: 6px; line-height: 1; }
+  .metric-label { font-size: 0.78rem; color: #64748b; font-weight: 600; }
+  .metric-value { font-size: 1.7rem; font-weight: 700; color: #0b3b5a; margin-top: 0.2rem; line-height: 1.1; }
   .finding {
     background: #fff;
     border: 1px solid #e2e8f0;
     border-left: 4px solid #b45309;
-    border-radius: 12px;
-    padding: 14px 16px;
-    margin-bottom: 10px;
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.7rem;
   }
   .kg-line {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.84rem;
+    font-size: 0.86rem;
     background: #ffffff;
     border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 8px 12px;
-    margin-bottom: 6px;
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.35rem;
     color: #0b3b5a;
   }
   .disclaimer {
     color: #64748b;
-    font-size: 0.82rem;
-    margin-top: 22px;
-    padding-top: 14px;
-    border-top: 1px solid #d7e2ee;
+    font-size: 0.84rem;
+    margin-top: 1.5rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid #d8e0ea;
   }
   div[data-testid="stButton"] > button {
     background: #0f766e;
     border: 1px solid #0f766e;
-    height: 2.8rem;
-    font-weight: 700;
-    border-radius: 12px;
+    height: 2.7rem;
+    font-weight: 600;
   }
   div[data-testid="stButton"] > button:hover {
-    background: #115e59;
-    border-color: #115e59;
+    background: #0d9488;
+    border-color: #0d9488;
   }
-  [data-testid="stFileUploaderDropzone"] { border-radius: 12px !important; }
 </style>
 """
 
@@ -305,26 +258,28 @@ def main():
     st.markdown(APP_CSS, unsafe_allow_html=True)
     _init_state()
 
-    st.markdown(
-        """
-        <div class="rx-topbar">
-          <div class="rx-brand-row">
-            <div class="rx-mark">Rx</div>
-            <div>
-              <div class="rx-brand">Rx-Strategist</div>
-              <div class="rx-sub">AI-assisted Prescription Safety Analysis</div>
+    head_left, head_right = st.columns([4, 1], vertical_alignment="center")
+    with head_left:
+        st.markdown(
+            """
+            <div class="rx-header-wrap">
+              <div>
+                <div class="rx-brand">Rx-Strategist</div>
+                <div class="rx-sub">AI-assisted Prescription Safety Analysis</div>
+              </div>
             </div>
-          </div>
-          <div class="rx-ready"><span></span>System Status: Ready</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+            """,
+            unsafe_allow_html=True,
+        )
+    with head_right:
+        st.markdown(
+            '<div class="rx-ready-wrap"><span class="rx-ready">System Status: Ready</span></div>',
+            unsafe_allow_html=True,
+        )
 
-    left, right = st.columns(2, gap="large")
+    left, right = st.columns(2, gap="large", vertical_alignment="top")
     with left:
         with st.container(border=True):
-            st.markdown('<p class="rx-kicker">INTAKE</p>', unsafe_allow_html=True)
             st.markdown('<p class="rx-section-title">Patient Profile</p>', unsafe_allow_html=True)
             age = st.number_input("Age", min_value=0, max_value=120, value=55, step=1)
             conditions_raw = st.text_input(
@@ -340,7 +295,6 @@ def main():
 
     with right:
         with st.container(border=True):
-            st.markdown('<p class="rx-kicker">DOCUMENT</p>', unsafe_allow_html=True)
             st.markdown('<p class="rx-section-title">Prescription</p>', unsafe_allow_html=True)
             upload = st.file_uploader(
                 "Upload Prescription",
@@ -361,11 +315,13 @@ def main():
                     st.session_state.result = None
                     st.session_state.view = None
                     st.session_state.error = None
+                st.markdown('<div class="rx-preview">', unsafe_allow_html=True)
                 st.image(
                     st.session_state.image_bytes,
                     caption=upload.name,
                     use_container_width=True,
                 )
+                st.markdown("</div>", unsafe_allow_html=True)
             else:
                 st.session_state.file_id = None
                 st.session_state.image_bytes = None
@@ -373,13 +329,9 @@ def main():
                 st.session_state.result = None
                 st.session_state.view = None
 
-    with st.container(border=True):
-        notice, action = st.columns([2.4, 1], vertical_alignment="center")
-        with notice:
-            st.caption("Review patient details, then run analysis. Findings are assistive only.")
-        with action:
-            analyze = st.button("Analyze Prescription", type="primary", use_container_width=True)
-
+    _left_pad, analyze_col, _right_pad = st.columns([1, 2, 1])
+    with analyze_col:
+        analyze = st.button("Analyze Prescription", type="primary", use_container_width=True)
     if analyze:
         if not st.session_state.image_bytes:
             _user_error("Upload a prescription image before analyzing.")
@@ -425,9 +377,8 @@ def main():
     with m4:
         _metric_card("Evidence Items", metrics["evidence"])
 
-    with st.container(border=True):
-        st.subheader("Medicines")
-        st.dataframe(view["medicines"], use_container_width=True, hide_index=True)
+    st.subheader("Medicines")
+    st.dataframe(view["medicines"], use_container_width=True, hide_index=True)
 
     st.subheader("Safety Findings")
     findings = view["findings"]
