@@ -11,6 +11,18 @@ A small prescription verification prototype with six stages:
 
 OCR only transcribes visible prescription text. Gemini only extracts and normalizes that text. Medical decisions are made by the deterministic verification engine. RAG, the knowledge graph, and the final checker attach supporting context; they do not override `APPROPRIATE` or `REVIEW`.
 
+## Streamlit dashboard
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+export GEMINI_API_KEY=your_key
+streamlit run app.py
+```
+
+The dashboard calls the existing `run_workflow` entry point. Patient age, conditions, and allergies from the form are passed into verification as `patient_overrides`.
+
 ## Local setup
 
 ```bash
@@ -28,5 +40,6 @@ Add `GEMINI_API_KEY` to Colab Secrets when a notebook uses OCR or extraction, th
 - `notebooks/rx_strategist_ocr_demo.ipynb` — OCR a prescription image, extract, and verify
 - `notebooks/rx_strategist_pipeline_demo.ipynb` — RAG, knowledge graph, LangGraph workflow, final checker, and evaluation (Gemini optional)
 - `notebooks/rx_strategist_ocr_pipeline_demo.ipynb` — OCR a prescription image, then run the full LangGraph pipeline (Gemini required)
+- `notebooks/rx_strategist_streamlit_colab.ipynb` — launch the Streamlit dashboard inside Colab (Gemini required)
 
 Clone the repository, install the requirements, add `src` to `sys.path`, then run the notebook cells.

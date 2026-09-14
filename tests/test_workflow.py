@@ -42,3 +42,37 @@ def test_workflow_runs_retrieve_verify_kg_and_final_check():
 def test_workflow_requires_input():
     with pytest.raises(ValueError, match="prescription, raw_text, or image_path"):
         run_workflow()
+
+
+def test_patient_overrides_change_indication_review():
+    prescription = Prescription(
+        patient=Patient(
+            age=55,
+            gender="female",
+            conditions=["hypertension"],
+            allergies=[],
+            kidney_function="normal",
+        ),
+        medications=[
+            Medication(
+                drug="losartan",
+                dose="50 mg",
+                frequency="once daily",
+                route="oral",
+            )
+        ],
+    )
+
+    result = run_workflow(
+        prescription=prescription,
+        patient_overrides={
+            "age": 60,
+            "conditions": ["asthma"],
+            "allergies": [],
+        },
+    )
+
+    assert result["prescription"]["patient"]["age"] == 60
+    assert result["prescription"]["patient"]["conditions"] == ["asthma"]
+    assert result["verification"]["overall_status"] == "REVIEW"
+    assert result["prescription"]["patient"]["gender"] == "female"

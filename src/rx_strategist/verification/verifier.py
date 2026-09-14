@@ -3,6 +3,7 @@ from rx_strategist.models.prescription import Patient, Medication, Prescription
 from rx_strategist.verification.indication import check_indication
 from rx_strategist.verification.dosage import check_dosage
 from rx_strategist.verification.interaction import check_interactions
+from rx_strategist.verification.allergy import check_allergies
 
 def verify_medication(medication: Medication, patient: Patient):
     indication = check_indication(
@@ -51,6 +52,10 @@ def verify_prescription(prescription: Prescription):
     interaction_result = check_interactions(
         prescription.medications
     )
+    allergy_result = check_allergies(
+        prescription.medications,
+        prescription.patient.allergies,
+    )
     has_review = any(
         medication["final_status"] == "REVIEW"
         for medication in medication_results
@@ -59,6 +64,8 @@ def verify_prescription(prescription: Prescription):
         has_review
         or interaction_result["status"]
         == "INTERACTION_FOUND"
+        or allergy_result["status"]
+        == "ALLERGY_FOUND"
     ):
         overall_status = "REVIEW"
     else:
@@ -66,5 +73,6 @@ def verify_prescription(prescription: Prescription):
     return {
         "overall_status": overall_status,
         "medications": medication_results,
-        "interaction_summary": interaction_result
+        "interaction_summary": interaction_result,
+        "allergy_summary": allergy_result,
     }

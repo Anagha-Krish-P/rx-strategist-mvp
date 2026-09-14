@@ -15,6 +15,7 @@ class PipelineState(TypedDict, total=False):
     raw_text: Optional[str]
     ocr_text: str
     prescription: dict
+    patient_overrides: dict
     evidence: list
     verification: dict
     kg_context: dict
@@ -40,21 +41,55 @@ def ocr_node(state: PipelineState) -> dict:
     return {"ocr_text": text, "raw_text": text}
 
 
-def extract_node(state: PipelineState) -> dict:
-    if state.get("prescription"):
-        return {}
-    raw_text = state.get("raw_text")
-    if not raw_text:
-        raise ValueError("Provide a prescription, raw_text, or image_path.")
-    api_key = state.get("api_key")
-    if not api_key:
-        raise ValueError("A Gemini API key is required to extract prescription text.")
-    from rx_strategist.extraction.gemini_extractor import GeminiPrescriptionExtractor
+def apply_patient_overrides(prescription: dict, overrides: Optional[dict]) -> dict:
+    if not overrides:
+        return prescription
+    patient = dict(prescription.get("patient") or {})
+    if overrides.get("age") is not None and overrides.get("age") != "":
+        patient["age"] = int(overrides["age"])
+    if overrides.get("conditions") is not None:
+        patient["conditions"] = [
+            item.strip()
+            for item in overrides["conditions"]
+            if str(item).strip()
+        ]
+    if overrides.get("allergies") is not None:
+        patient["allergies"] = [
+            item.strip()
+            for item in overrides["allergies"]
+            if str(item).strip()
+        ]
+    patient.setdefault("gender", "unknown")
+    patient.setdefault("kidney_function", "unknown")
+    patient.setdefault("conditions", [])
+    patient.setdefault("allergies", [])
+    if "age" not in patient:
+        patient["age"] = 0
+    updated = dict(prescription)
+    updated["patient"] = patient
+    return updated
 
-    extracted = GeminiPrescriptionExtractor(api_key=api_key).extract_prescription(
-        raw_text
+
+def extract_node(state: PipelineState) -> dict:
+    prescription = state.get("prescription")
+    if not prescription:
+        raw_text = state.get("raw_text")
+        if not raw_text:
+            raise ValueError("Provide a prescription, raw_text, or image_path.")
+        api_key = state.get("api_key")
+        if not api_key:
+            raise ValueError("A Gemini API key is required to extract prescription text.")
+        from rx_strategist.extraction.gemini_extractor import GeminiPrescriptionExtractor
+
+        extracted = GeminiPrescriptionExtractor(api_key=api_key).extract_prescription(
+            raw_text
+        )
+        prescription = extracted.model_dump()
+    prescription = apply_patient_overrides(
+        prescription,
+        state.get("patient_overrides"),
     )
-    return {"prescription": extracted.model_dump()}
+    return {"prescription": prescription}
 
 
 def retrieve_node(state: PipelineState) -> dict:

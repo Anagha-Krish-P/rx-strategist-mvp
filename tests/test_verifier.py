@@ -54,3 +54,28 @@ def test_interaction_causes_prescription_review():
 
     assert result["overall_status"] == "REVIEW"
     assert result["interaction_summary"]["status"] == "INTERACTION_FOUND"
+
+
+def test_matching_allergy_causes_prescription_review():
+    prescription = Prescription(
+        patient=Patient(
+            age=55,
+            gender="female",
+            conditions=["hypertension"],
+            allergies=["losartan"],
+            kidney_function="normal",
+        ),
+        medications=[
+            Medication(
+                drug="losartan",
+                dose="50 mg",
+                frequency="once daily",
+                route="oral",
+            )
+        ],
+    )
+
+    result = verify_prescription(prescription)
+
+    assert result["overall_status"] == "REVIEW"
+    assert result["allergy_summary"]["status"] == "ALLERGY_FOUND"
