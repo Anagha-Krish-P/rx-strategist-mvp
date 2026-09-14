@@ -36,6 +36,7 @@ APP_CSS = """
     justify-content: space-between;
     align-items: flex-end;
     gap: 1rem;
+    margin-top: 10px;
     margin-bottom: 1.4rem;
     padding-bottom: 1rem;
     border-bottom: 1px solid #d7e1ee;
