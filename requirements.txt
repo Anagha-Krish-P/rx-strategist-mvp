@@ -2,3 +2,4 @@ pydantic
 google-genai
 pytest
 langgraph
+streamlit
