@@ -52,3 +52,29 @@ def test_empty_query_raises_value_error():
 
     with pytest.raises(ValueError, match="query"):
         retriever.retrieve("   ")
+
+
+def test_unrelated_prescription_does_not_return_demo_drug_docs():
+    retriever = EvidenceRetriever.from_evidence_dir()
+    prescription = {
+        "patient": {
+            "age": 42,
+            "conditions": ["dry eye"],
+            "allergies": [],
+            "kidney_function": "normal",
+        },
+        "medications": [
+            {
+                "drug": "Ciplox",
+                "dose": "500 mg",
+                "frequency": "twice daily",
+                "route": "oral",
+            }
+        ],
+    }
+    hits = retriever.retrieve_for_prescription(prescription, k=3)
+    blob = " ".join(
+        f"{hit['id']} {hit['title']} {hit['text']}" for hit in hits
+    ).lower()
+    assert "losartan" not in blob
+    assert "metformin" not in blob

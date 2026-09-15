@@ -33,6 +33,27 @@ def query_from_prescription(prescription: dict) -> str:
     return " ".join(str(part) for part in parts if part)
 
 
+def _prescribed_drug_tokens(prescription: dict) -> List[str]:
+    tokens = []
+    for medication in prescription.get("medications", []) or []:
+        drug = str(medication.get("drug") or "")
+        for token in TOKEN_RE.findall(drug.lower()):
+            if len(token) > 3:
+                tokens.append(token)
+    return list(dict.fromkeys(tokens))
+
+
+def _hit_mentions_tokens(hit: dict, tokens: Sequence[str]) -> bool:
+    blob = " ".join(
+        [
+            str(hit.get("id") or ""),
+            str(hit.get("title") or ""),
+            str(hit.get("text") or ""),
+        ]
+    ).lower()
+    return any(token in blob for token in tokens)
+
+
 class EvidenceRetriever:
     def __init__(self, documents: Sequence[dict]):
         if not documents:
@@ -88,7 +109,11 @@ class EvidenceRetriever:
                 if current is None or hit["score"] > current["score"]:
                     merged[hit["id"]] = hit
         ranked = sorted(merged.values(), key=lambda item: item["score"], reverse=True)
-        return ranked[:k]
+        tokens = _prescribed_drug_tokens(prescription)
+        if not tokens:
+            return []
+        filtered = [hit for hit in ranked if _hit_mentions_tokens(hit, tokens)]
+        return filtered[:k]
 
     @staticmethod
     def _doc_text(document: dict) -> str:
