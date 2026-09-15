@@ -10,6 +10,12 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from rx_strategist.agents.workflow import run_workflow
+from rx_strategist.extraction.gemini_extractor import GeminiPrescriptionExtractor
+from rx_strategist.ocr.gemini_ocr import GeminiPrescriptionOCR
+from rx_strategist.presentation.ocr_patient import (
+    format_conditions,
+    patient_fields_from_extraction,
+)
 from rx_strategist.presentation.report import build_markdown_report
 from rx_strategist.presentation.result_adapter import adapt_workflow_result
 from rx_strategist.presentation.session import next_upload_state
@@ -17,6 +23,12 @@ from rx_strategist.presentation.session import next_upload_state
 logger = logging.getLogger("rx_strategist.app")
 
 ALLOWED_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+MIME_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+}
 DISCLAIMER = (
     "This system provides AI-assisted medication safety information "
     "and does not replace professional clinical judgment."
@@ -122,6 +134,12 @@ def _init_state():
         "result": None,
         "error": None,
         "view": None,
+        "patient_age": 0,
+        "patient_conditions": "",
+        "patient_allergies": "",
+        "ocr_text": None,
+        "ocr_synced_file_id": None,
+        "ocr_sync_error": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -149,15 +167,19 @@ def _analyze(image_bytes: bytes, image_name: str, overrides: dict):
 
     tmp_path = None
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as handle:
-            handle.write(image_bytes)
-            tmp_path = handle.name
+        workflow_kwargs = {
+            "api_key": api_key,
+            "patient_overrides": overrides,
+        }
+        if st.session_state.get("ocr_text"):
+            workflow_kwargs["raw_text"] = st.session_state.ocr_text
+        else:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as handle:
+                handle.write(image_bytes)
+                tmp_path = handle.name
+            workflow_kwargs["image_path"] = tmp_path
         with st.spinner("Running OCR, extraction, and safety analysis..."):
-            result = run_workflow(
-                image_path=tmp_path,
-                api_key=api_key,
-                patient_overrides=overrides,
-            )
+            result = run_workflow(**workflow_kwargs)
         medicines = (result.get("verification") or {}).get("medications") or []
         if not medicines:
             _user_error("No medicines were extracted from this prescription.")
@@ -165,6 +187,8 @@ def _analyze(image_bytes: bytes, image_name: str, overrides: dict):
         st.session_state.result = result
         st.session_state.view = adapt_workflow_result(result)
         st.session_state.error = None
+        if result.get("ocr_text"):
+            st.session_state.ocr_text = result.get("ocr_text")
     except ValueError as exc:
         logger.exception("Workflow value error")
         _user_error(str(exc))
@@ -174,6 +198,56 @@ def _analyze(image_bytes: bytes, image_name: str, overrides: dict):
     finally:
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)
+
+
+def _patient_overrides():
+    return {
+        "age": int(st.session_state.get("patient_age") or 0),
+        "conditions": _parse_list(st.session_state.get("patient_conditions")),
+        "allergies": _parse_list(st.session_state.get("patient_allergies")),
+    }
+
+
+def _sync_ocr_from_upload(image_bytes: bytes, image_name: str):
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        st.session_state.ocr_sync_error = (
+            "A Gemini API key is required to read patient details from the prescription."
+        )
+        return
+    suffix = Path(image_name).suffix.lower()
+    mime_type = MIME_TYPES.get(suffix)
+    if suffix not in ALLOWED_SUFFIXES or not mime_type:
+        st.session_state.ocr_sync_error = "Unsupported image type. Upload a JPG, PNG, or WebP file."
+        return
+    if not image_bytes:
+        st.session_state.ocr_sync_error = "The uploaded file is empty."
+        return
+    try:
+        with st.spinner("Reading prescription text..."):
+            ocr_text = GeminiPrescriptionOCR(api_key=api_key).ocr_image(
+                image_bytes,
+                mime_type=mime_type,
+            )
+        st.session_state.ocr_text = ocr_text
+        extracted = None
+        try:
+            extracted = GeminiPrescriptionExtractor(api_key=api_key).extract_prescription(
+                ocr_text
+            )
+        except Exception:
+            logger.exception("Structured extract on upload failed; using OCR fallback")
+        fields = patient_fields_from_extraction(extracted, ocr_text)
+        if fields.get("age"):
+            st.session_state.patient_age = int(fields["age"])
+        if fields.get("conditions"):
+            st.session_state.patient_conditions = format_conditions(fields["conditions"])
+        st.session_state.ocr_sync_error = None
+    except Exception:
+        logger.exception("OCR sync failed")
+        st.session_state.ocr_sync_error = (
+            "Could not read patient details from this image yet. You can still enter them manually."
+        )
 
 
 def _render_findings(title: str, items: list):
@@ -218,21 +292,6 @@ def main():
     )
 
     left, right = st.columns(2, gap="large")
-    with left:
-        st.markdown('<div class="rx-card"><h3>Patient Profile</h3>', unsafe_allow_html=True)
-        age = st.number_input("Age", min_value=0, max_value=120, value=55, step=1)
-        conditions_raw = st.text_input(
-            "Medical Conditions",
-            value="hypertension, type 2 diabetes",
-            help="Comma-separated. Used by indication matching.",
-        )
-        allergies_raw = st.text_input(
-            "Known Allergies",
-            value="",
-            help="Comma-separated. Matched against prescribed drug names.",
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-
     with right:
         st.markdown('<div class="rx-card"><h3>Prescription</h3>', unsafe_allow_html=True)
         upload = st.file_uploader(
@@ -255,13 +314,41 @@ def main():
             st.session_state.result = None
             st.session_state.view = None
             st.session_state.error = None
-        st.image(st.session_state.image_bytes, caption=upload.name, use_container_width=True)
+            st.session_state.ocr_synced_file_id = None
+            st.session_state.ocr_text = None
+            st.session_state.ocr_sync_error = None
+        if st.session_state.ocr_synced_file_id != st.session_state.file_id:
+            _sync_ocr_from_upload(st.session_state.image_bytes, st.session_state.image_name)
+            st.session_state.ocr_synced_file_id = st.session_state.file_id
     else:
         st.session_state.file_id = None
         st.session_state.image_bytes = None
         st.session_state.image_name = None
         st.session_state.result = None
         st.session_state.view = None
+        st.session_state.ocr_text = None
+        st.session_state.ocr_synced_file_id = None
+
+    with left:
+        st.markdown('<div class="rx-card"><h3>Patient Profile</h3>', unsafe_allow_html=True)
+        st.number_input("Age", min_value=0, max_value=120, step=1, key="patient_age")
+        st.text_input(
+            "Medical Conditions",
+            key="patient_conditions",
+            help="Comma-separated. Synced from OCR when the prescription is uploaded.",
+        )
+        st.text_input(
+            "Known Allergies",
+            key="patient_allergies",
+            help="Comma-separated. Matched against prescribed drug names.",
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    if st.session_state.ocr_sync_error:
+        st.caption(st.session_state.ocr_sync_error)
+
+    if st.session_state.image_bytes:
+        st.image(st.session_state.image_bytes, caption=st.session_state.image_name, use_container_width=True)
 
     analyze = st.button("Analyze Prescription", type="primary", use_container_width=True)
     if analyze:
@@ -271,11 +358,7 @@ def main():
             _analyze(
                 st.session_state.image_bytes,
                 st.session_state.image_name,
-                {
-                    "age": int(age),
-                    "conditions": _parse_list(conditions_raw),
-                    "allergies": _parse_list(allergies_raw),
-                },
+                _patient_overrides(),
             )
 
     if st.session_state.error:
@@ -335,8 +418,14 @@ def main():
     else:
         st.caption("No retrieved evidence items.")
 
-    with st.expander("Extracted Prescription Text"):
-        st.text(view["ocr_text"] or "No OCR text was returned.")
+    with st.expander("Extracted Prescription Text", expanded=True):
+        ocr_left, ocr_right = st.columns(2, gap="large")
+        with ocr_left:
+            st.caption("OCR lines")
+            st.markdown(view.get("ocr_lines_markdown") or "_No OCR text was returned._")
+        with ocr_right:
+            st.caption("Parsed fields")
+            st.markdown(view.get("ocr_fields_markdown") or "_No parsed fields._")
 
     st.subheader("AI Safety Explanation")
     st.write(view["explanation_notes"] or "No explanation notes were returned by the final checker.")

@@ -24,6 +24,14 @@ def verify_medication(medication: Medication, patient: Patient):
             medication.dose,
             medication.frequency
         )
+    elif indication.get("status") == "APPROPRIATE" and indication.get("source"):
+        dosage = check_dosage(
+            medication.drug,
+            "",
+            medication.dose,
+            medication.frequency
+        )
+    lookup = indication.get("lookup") or dosage.get("lookup")
     if (
         indication["status"] == "APPROPRIATE"
         and dosage["status"] == "APPROPRIATE"
@@ -31,7 +39,7 @@ def verify_medication(medication: Medication, patient: Patient):
         final_status = "APPROPRIATE"
     else:
         final_status = "REVIEW"
-    return {
+    result = {
         "drug": medication.drug,
         "dose": medication.dose,
         "frequency": medication.frequency,
@@ -40,6 +48,9 @@ def verify_medication(medication: Medication, patient: Patient):
         "dosage": dosage,
         "final_status": final_status
     }
+    if lookup:
+        result["api_lookup"] = lookup
+    return result
 
 def verify_prescription(prescription: Prescription):
     medication_results = []

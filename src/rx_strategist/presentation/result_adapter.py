@@ -1,4 +1,7 @@
+import re
 from typing import Any, Dict, List, Optional
+
+DRUG_TOKEN_RE = re.compile(r"[a-z0-9]+")
 
 
 def _text_or_missing(value: Any) -> str:
@@ -139,7 +142,21 @@ def adapt_workflow_result(result: Optional[dict]) -> Dict[str, Any]:
                 }
             )
 
-    kg_lines = _kg_lines(kg_context)
+    drug_names = [
+        _text_or_missing(medication.get("drug"))
+        for medication in medications
+        if medication.get("drug")
+    ]
+    drug_tokens = _drug_tokens(drug_names)
+    evidence_items = _filter_evidence(evidence_items, drug_tokens)
+    api_cards = _api_evidence_cards(medications)
+    evidence_items = api_cards + evidence_items
+
+    kg_lines = [
+        line
+        for line in _kg_lines(kg_context)
+        if _text_mentions_tokens(line, drug_tokens)
+    ]
     recap = _deterministic_recap(
         verification.get("overall_status"),
         interaction_findings,
@@ -147,6 +164,9 @@ def adapt_workflow_result(result: Optional[dict]) -> Dict[str, Any]:
         dosage_findings,
         allergy_findings,
     )
+    ocr_text = result.get("ocr_text") or result.get("raw_text") or ""
+    ocr_lines = _ocr_line_rows(ocr_text)
+    ocr_fields = _ocr_field_rows(patient, medications)
 
     return {
         "status": _status_view(verification.get("overall_status"), bool(medicine_rows)),
@@ -166,7 +186,11 @@ def adapt_workflow_result(result: Optional[dict]) -> Dict[str, Any]:
         },
         "evidence": evidence_items,
         "kg_lines": kg_lines,
-        "ocr_text": result.get("ocr_text") or result.get("raw_text") or "",
+        "ocr_text": ocr_text,
+        "ocr_lines": ocr_lines,
+        "ocr_fields": ocr_fields,
+        "ocr_lines_markdown": _markdown_table(["Line", "Text"], ocr_lines),
+        "ocr_fields_markdown": _markdown_table(["Field", "Value"], ocr_fields),
         "explanation_notes": final_check.get("notes") or "",
         "explanation_recap": recap,
         "overall_status": verification.get("overall_status"),
@@ -191,6 +215,134 @@ def _kg_lines(kg_context: dict) -> List[str]:
             f"{key} → HAS_DOSAGE → {dosage.get('dose')} {dosage.get('frequency')}"
         )
     return lines
+
+
+def _drug_tokens(drug_names: List[str]) -> List[str]:
+    tokens = []
+    for name in drug_names:
+        for token in DRUG_TOKEN_RE.findall(str(name).lower()):
+            if len(token) > 3:
+                tokens.append(token)
+    return list(dict.fromkeys(tokens))
+
+
+def _text_mentions_tokens(text: str, tokens: List[str]) -> bool:
+    if not tokens:
+        return False
+    blob = str(text or "").lower()
+    return any(token in blob for token in tokens)
+
+
+def _filter_evidence(items: List[dict], tokens: List[str]) -> List[dict]:
+    if not tokens:
+        return []
+    kept = []
+    for item in items:
+        blob = " ".join(
+            [
+                str(item.get("source") or ""),
+                str(item.get("title") or ""),
+                str(item.get("text") or ""),
+            ]
+        )
+        if _text_mentions_tokens(blob, tokens):
+            kept.append(item)
+    return kept
+
+
+def _api_evidence_cards(medications: List[dict]) -> List[dict]:
+    cards = []
+    seen = set()
+    for medication in medications:
+        lookup = medication.get("api_lookup") or {}
+        if not lookup.get("resolved"):
+            continue
+        drug = str(medication.get("drug") or lookup.get("name") or "Medication")
+        key = drug.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        parts = []
+        if lookup.get("rxcui"):
+            parts.append(f"RxCUI: {lookup['rxcui']}")
+        ingredients = lookup.get("ingredients") or []
+        if ingredients:
+            parts.append("Active ingredients: " + ", ".join(str(item) for item in ingredients))
+        if lookup.get("indications_text"):
+            parts.append("Indications: " + lookup["indications_text"])
+        if lookup.get("dosage_text"):
+            parts.append("Dosage guidance: " + lookup["dosage_text"])
+        source = lookup.get("source") or "public API"
+        cards.append(
+            {
+                "source": source,
+                "title": f"{drug} — API drug specification",
+                "text": "\n\n".join(parts) or f"{drug} was resolved via {source}.",
+                "score": None,
+            }
+        )
+    return cards
+
+
+def _ocr_line_rows(ocr_text: str) -> List[dict]:
+    lines = [line.strip() for line in str(ocr_text or "").splitlines() if line.strip()]
+    if not lines:
+        return [{"Line": "—", "Text": "No OCR text was returned."}]
+    return [{"Line": str(index), "Text": line} for index, line in enumerate(lines, start=1)]
+
+
+def _ocr_field_rows(patient: dict, medications: List[dict]) -> List[dict]:
+    rows = [
+        {"Field": "Age", "Value": _text_or_missing(patient.get("age") if patient.get("age") not in (None, 0) else None)},
+        {
+            "Field": "Conditions",
+            "Value": ", ".join(patient.get("conditions") or []) or "Not extracted",
+        },
+        {
+            "Field": "Allergies",
+            "Value": ", ".join(patient.get("allergies") or []) or "Not extracted",
+        },
+    ]
+    if not medications:
+        rows.append({"Field": "Medicines", "Value": "Not extracted"})
+        return rows
+    for index, medication in enumerate(medications, start=1):
+        rows.append(
+            {
+                "Field": f"Medicine {index}",
+                "Value": " ".join(
+                    part
+                    for part in [
+                        medication.get("drug"),
+                        medication.get("dose"),
+                        medication.get("frequency"),
+                        medication.get("route"),
+                    ]
+                    if part
+                )
+                or "Not extracted",
+            }
+        )
+    return rows
+
+
+def _markdown_table(headers: List[str], rows: List[dict]) -> str:
+    if not rows:
+        return "_No data._"
+    escaped_headers = [_escape_cell(header) for header in headers]
+    lines = [
+        "| " + " | ".join(escaped_headers) + " |",
+        "|" + "|".join(["---"] * len(headers)) + "|",
+    ]
+    for row in rows:
+        values = [_escape_cell(row.get(header, "")) for header in headers]
+        lines.append("| " + " | ".join(values) + " |")
+    return "\n".join(lines)
+
+
+def _escape_cell(value: Any) -> str:
+    text = str(value if value is not None else "").replace("|", "\\|").replace("\n", " ")
+    return text.strip() or " "
 
 
 def _deterministic_recap(

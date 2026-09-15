@@ -147,3 +147,62 @@ def test_new_upload_invalidates_previous_result():
     swapped = next_upload_state("a.png:10", "b.png:20")
     assert swapped["invalidate_result"] is True
     assert swapped["file_id"] == "b.png:20"
+
+
+def test_adapter_filters_demo_evidence_and_builds_ocr_tables():
+    result = {
+        "ocr_text": "Age: 42 years\nCiplox 500 mg BD\nRefresh Tear 1 drop TID",
+        "prescription": {
+            "patient": {"age": 42, "conditions": ["dry eye"], "allergies": []},
+            "medications": [
+                {"drug": "Ciplox", "dose": "500 mg", "frequency": "twice daily", "route": "oral"}
+            ],
+        },
+        "evidence": [
+            {
+                "id": "losartan_hypertension",
+                "title": "Losartan for hypertension",
+                "text": "Losartan is used for hypertension.",
+                "score": 0.9,
+            }
+        ],
+        "verification": {
+            "overall_status": "APPROPRIATE",
+            "medications": [
+                {
+                    "drug": "Ciplox",
+                    "dose": "500 mg",
+                    "frequency": "twice daily",
+                    "route": "oral",
+                    "indication": {"status": "APPROPRIATE", "source": "rxnorm"},
+                    "dosage": {"status": "APPROPRIATE"},
+                    "final_status": "APPROPRIATE",
+                    "api_lookup": {
+                        "resolved": True,
+                        "rxcui": "20481",
+                        "ingredients": ["Ciprofloxacin"],
+                        "indications_text": "Bacterial infections",
+                        "dosage_text": "500 mg twice daily",
+                        "source": "rxnorm/openfda",
+                    },
+                }
+            ],
+            "interaction_summary": {"status": "NO_KNOWN_INTERACTION", "interactions": []},
+            "allergy_summary": {"status": "NO_ALLERGY_MATCH", "matches": []},
+        },
+        "kg_context": {
+            "indications": {"losartan": ["hypertension"]},
+            "interactions": [],
+            "dosages": {},
+        },
+        "final_check": {"notes": "ok", "supporting_evidence": []},
+    }
+    view = adapt_workflow_result(result)
+    assert all("losartan" not in (item["title"] + item["text"]).lower() for item in view["evidence"])
+    assert view["kg_lines"] == []
+    assert any("Ciprofloxacin" in item["text"] for item in view["evidence"])
+    assert "| Line |" in view["ocr_lines_markdown"]
+    assert "Ciplox 500 mg BD" in view["ocr_lines_markdown"]
+    assert "| Field |" in view["ocr_fields_markdown"]
+    assert "42" in view["ocr_fields_markdown"]
+    assert "Medicine 1" in view["ocr_fields_markdown"]
