@@ -1,392 +1,449 @@
-"""
-Rx-Strategist - AI-assisted prescription safety analysis
-Flow: Cover -> Patient & Prescription -> Analysis -> Knowledge Graph -> Overview
-Run:  streamlit run app.py
-"""
-from datetime import datetime, timezone
+import logging
+import os
+import sys
+import tempfile
+from pathlib import Path
 
-import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="Rx-Strategist", page_icon="💊", layout="wide")
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT / "src"))
 
-STEPS = ["Cover", "Patient & Prescription", "Analysis", "Knowledge Graph", "Overview"]
+from rx_strategist.agents.workflow import run_workflow
+from rx_strategist.extraction.gemini_extractor import GeminiPrescriptionExtractor
+from rx_strategist.ocr.gemini_ocr import GeminiPrescriptionOCR
+from rx_strategist.presentation.ocr_patient import (
+    format_conditions,
+    patient_fields_from_extraction,
+)
+from rx_strategist.presentation.report import build_markdown_report
+from rx_strategist.presentation.result_adapter import adapt_workflow_result
+from rx_strategist.presentation.session import next_upload_state
 
-# ----------------------------------------------------------------------------
-# 1. BACKEND ADAPTER  -  connect your real pipeline here
-# ----------------------------------------------------------------------------
-def run_pipeline(age, conditions, allergies, image_bytes, image_name):
-    """
-    Replace the body of this function with a call to your rx_strategist code
-    (OCR -> medicine extraction -> deterministic verifier -> retrieval -> explanation).
-    It must return a dict with the keys shown in the demo below.
-    """
-    # Example:
-    #   from rx_strategist.pipeline import analyze
-    #   raw = analyze(image_bytes, age=age, conditions=conditions, allergies=allergies)
-    #   return {...map raw into the dict below...}
+logger = logging.getLogger("rx_strategist.app")
 
-    return {  # demo data so the UI works before the backend is connected
-        "status": "REVIEW",
-        "headline": "Review recommended",
-        "summary": "Potential safety concern detected.",
-        "extracted_text": (
-            "55-year-old female with hypertension and type 2 diabetes.\n"
-            "Losartan 50 mg OD PO.\nMetformin 500 mg BID PO.\n"
-            "Kidney function is normal. No known allergies."
-        ),
-        "medicines": [
-            {"Medicine": "Losartan", "Dose": "50 mg", "Frequency": "once daily",
-             "Verification": "APPROPRIATE", "Risk": "Low"},
-            {"Medicine": "Metformin", "Dose": "500 mg", "Frequency": "twice daily",
-             "Verification": "APPROPRIATE", "Risk": "Low"},
-        ],
-        "interactions": [
-            {"a": "Losartan", "b": "Metformin",
-             "why": "Demo interaction record",
-             "recommendation": "Clinician review of this drug combination is recommended."},
-        ],
-        "patient_risks": [],
-        "graph": [
-            ("Losartan", "TREATS", "hypertension"),
-            ("Losartan", "TREATS", "diabetic nephropathy"),
-            ("Metformin", "TREATS", "type 2 diabetes"),
-            ("Losartan", "INTERACTS_WITH", "Metformin"),
-            ("Losartan:hypertension", "HAS_DOSAGE", "50 mg once daily"),
-            ("Metformin:type 2 diabetes", "HAS_DOSAGE", "500 mg twice daily"),
-        ],
-        "evidence": [
-            {"title": "Losartan and metformin interaction", "source": "losartan_metformin_interaction",
-             "relevance": 0.6921,
-             "text": "The demo knowledge base records an example interaction between losartan and "
-                     "metformin. When both drugs appear on the same prescription, the deterministic "
-                     "verifier flags INTERACTION_FOUND and the overall status becomes REVIEW."},
-            {"title": "Metformin for type 2 diabetes", "source": "metformin_t2dm",
-             "relevance": 0.4658, "text": "Metformin is a first-line therapy for type 2 diabetes."},
-            {"title": "Dosage guardrails", "source": "dosage_guardrails",
-             "relevance": 0.4061, "text": "Dose ranges used by the verifier to flag out-of-range prescriptions."},
-        ],
-        "explanation": (
-            "Final decision matches the deterministic verification engine. Retrieved evidence and "
-            "knowledge-graph context are attached for review and are not used to override "
-            "APPROPRIATE or REVIEW. The deterministic verifier flagged this prescription for review "
-            "because 1 drug-drug interaction record was found."
-        ),
-    }
-
-
-# ----------------------------------------------------------------------------
-# 2. STYLE
-# ----------------------------------------------------------------------------
-st.markdown(
-    """
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
-    :root{
-        --navy:#12304a; --blue:#1f4e79; --teal:#2f7d6b; --amber:#c98a12;
-        --red:#b83a2e; --bg:#f4f7fb; --line:#d9e2ec; --muted:#5f7387;
-    }
-    html, body, [class*="css"], .stApp { font-family:'IBM Plex Sans',sans-serif; }
-    .stApp { background:var(--bg); color:var(--navy); }
-    .block-container { max-width:1150px; padding-top:1.5rem; }
-
-    /* stepper */
-    .stepper{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:1.2rem; }
-    .pill{ padding:6px 14px; border-radius:999px; border:1px solid var(--line);
-           font-size:.85rem; color:var(--muted); background:#fff; }
-    .pill.done{ color:var(--teal); border-color:#bfdcd3; background:#eef7f4; }
-    .pill.now{ color:#fff; background:var(--blue); border-color:var(--blue); font-weight:600; }
-
-    /* cover */
-    .hero{ background:var(--navy); color:#fff; border-radius:20px; padding:64px 48px 56px; }
-    .rxmark{ width:72px; height:72px; border-radius:18px; background:#fff; color:var(--navy);
-             display:flex; align-items:center; justify-content:center; font-weight:700;
-             font-size:2rem; margin-bottom:24px; }
-    .hero h1{ font-size:3.4rem; line-height:1.05; margin:0 0 12px; letter-spacing:-.02em; color:#fff; }
-    .hero p{ font-size:1.2rem; max-width:620px; color:#c9d8e6; margin:0; }
-    .flow{ display:flex; gap:12px; margin-top:32px; flex-wrap:wrap; }
-    .flow span{ border:1px solid #3d5f7d; border-radius:10px; padding:8px 14px; font-size:.95rem; color:#e6eef6; }
-
-    /* result banners */
-    .banner{ border-radius:14px; padding:20px 24px; margin-bottom:16px; border:1px solid; }
-    .banner.review{ background:#fff5e0; border-color:#f0d9a0; }
-    .banner.ok{ background:#eaf6f1; border-color:#bfdcd3; }
-    .banner.alert{ background:#fdecea; border-color:#f0b9b3; }
-    .banner h3{ margin:0 0 4px; font-size:1.25rem; }
-    .banner p{ margin:0; color:#33475a; }
-    .finding{ background:#fff; border-left:5px solid var(--amber); border-radius:10px;
-              padding:14px 18px; margin-bottom:10px; }
-    .note{ color:var(--muted); font-size:.9rem; }
-    div.stButton > button[kind="primary"]{ background:var(--blue); border-color:var(--blue); }
-    </style>
-    """,
-    unsafe_allow_html=True,
+ALLOWED_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+MIME_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+}
+DISCLAIMER = (
+    "This system provides AI-assisted medication safety information "
+    "and does not replace professional clinical judgment."
 )
 
-# ----------------------------------------------------------------------------
-# 3. STATE + NAVIGATION HELPERS
-# ----------------------------------------------------------------------------
-st.session_state.setdefault("step", 0)
-st.session_state.setdefault("result", None)
-st.session_state.setdefault("profile", {})
+APP_CSS = """
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+  html, body, [class*="stApp"] {
+    font-family: "IBM Plex Sans", sans-serif;
+    color: #12263a;
+  }
+  .stApp { background: #f4f7fb; }
+  .block-container { padding-top: 1.4rem; max-width: 1180px; }
+  .rx-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 1rem;
+    margin-top: 10px;
+    margin-bottom: 1.4rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #d7e1ee;
+  }
+  .rx-brand { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.03em; }
+  .rx-sub { color: #5b6b7c; margin-top: 0.2rem; font-size: 0.95rem; }
+  .rx-ready {
+    background: #e8f6ee;
+    color: #17643b;
+    border: 1px solid #b7e0c6;
+    border-radius: 999px;
+    padding: 0.4rem 0.85rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+  .rx-card {
+    background: #fff;
+    border: 1px solid #dce6f2;
+    border-radius: 16px;
+    padding: 1.15rem 1.2rem 1.25rem;
+    box-shadow: 0 8px 24px rgba(18, 38, 58, 0.04);
+    height: 100%;
+  }
+  .rx-card h3 { margin: 0 0 0.85rem; font-size: 1.02rem; }
+  .rx-hint { color: #6b7c8d; font-size: 0.82rem; margin-top: 0.45rem; }
+  .status-low, .status-review, .status-unknown {
+    border-radius: 16px;
+    padding: 1.2rem 1.3rem;
+    border: 1px solid transparent;
+  }
+  .status-low { background: #e9f7ef; border-color: #b7e0c6; }
+  .status-review { background: #fff6e5; border-color: #f0d39a; }
+  .status-unknown { background: #eef2f6; border-color: #d4dde7; }
+  .status-kicker {
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: #5b6b7c;
+    margin-bottom: 0.25rem;
+  }
+  .status-title { font-size: 1.45rem; font-weight: 700; margin: 0; }
+  .status-copy { margin: 0.35rem 0 0; color: #334155; }
+  .finding {
+    background: #fff;
+    border: 1px solid #e3ebf4;
+    border-left: 4px solid #c9a227;
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.7rem;
+  }
+  .kg-line {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.86rem;
+    background: #f7fafc;
+    border-radius: 8px;
+    padding: 0.45rem 0.7rem;
+    margin-bottom: 0.35rem;
+  }
+  .disclaimer {
+    color: #5b6b7c;
+    font-size: 0.84rem;
+    margin-top: 1.5rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid #d7e1ee;
+  }
+</style>
+"""
 
 
-def go(n: int):
-    st.session_state.step = max(0, min(n, len(STEPS) - 1))
+def _parse_list(raw: str):
+    return [part.strip() for part in (raw or "").split(",") if part.strip()]
 
 
-def stepper():
-    cur = st.session_state.step
-    pills = ""
-    for i, name in enumerate(STEPS):
-        cls = "now" if i == cur else "done" if i < cur else ""
-        pills += f'<span class="pill {cls}">{i + 1}. {name}</span>'
-    st.markdown(f'<div class="stepper">{pills}</div>', unsafe_allow_html=True)
+def _file_id(upload) -> str:
+    return f"{upload.name}:{upload.size}"
 
 
-def nav(next_label="Continue", next_disabled=False):
-    cur = st.session_state.step
-    st.write("")
-    left, _, right = st.columns([1, 3, 1])
-    left.button("Back", on_click=go, args=(cur - 1,), use_container_width=True, key=f"back{cur}")
-    if cur < len(STEPS) - 1:
-        right.button(next_label, on_click=go, args=(cur + 1,), type="primary",
-                     use_container_width=True, disabled=next_disabled, key=f"next{cur}")
+def _init_state():
+    defaults = {
+        "file_id": None,
+        "image_bytes": None,
+        "image_name": None,
+        "result": None,
+        "error": None,
+        "view": None,
+        "patient_age": 0,
+        "patient_conditions": "",
+        "patient_allergies": "",
+        "ocr_text": None,
+        "ocr_synced_file_id": None,
+        "ocr_sync_error": None,
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
 
 
-def esc(s):
-    return str(s).replace("\\", "\\\\").replace('"', '\\"')
+def _user_error(message: str):
+    st.session_state.error = message
+    st.session_state.result = None
+    st.session_state.view = None
 
 
-# ----------------------------------------------------------------------------
-# 4. PAGES
-# ----------------------------------------------------------------------------
-def page_cover():
+def _analyze(image_bytes: bytes, image_name: str, overrides: dict):
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        _user_error("A Gemini API key is required. Set the GEMINI_API_KEY environment variable.")
+        return
+    suffix = Path(image_name).suffix.lower()
+    if suffix not in ALLOWED_SUFFIXES:
+        _user_error("Unsupported image type. Upload a JPG, PNG, or WebP file.")
+        return
+    if not image_bytes:
+        _user_error("The uploaded file is empty.")
+        return
+
+    tmp_path = None
+    try:
+        workflow_kwargs = {
+            "api_key": api_key,
+            "patient_overrides": overrides,
+        }
+        if st.session_state.get("ocr_text"):
+            workflow_kwargs["raw_text"] = st.session_state.ocr_text
+        else:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as handle:
+                handle.write(image_bytes)
+                tmp_path = handle.name
+            workflow_kwargs["image_path"] = tmp_path
+        with st.spinner("Running OCR, extraction, and safety analysis..."):
+            result = run_workflow(**workflow_kwargs)
+        medicines = (result.get("verification") or {}).get("medications") or []
+        if not medicines:
+            _user_error("No medicines were extracted from this prescription.")
+            return
+        st.session_state.result = result
+        st.session_state.view = adapt_workflow_result(result)
+        st.session_state.error = None
+        if result.get("ocr_text"):
+            st.session_state.ocr_text = result.get("ocr_text")
+    except ValueError as exc:
+        logger.exception("Workflow value error")
+        _user_error(str(exc))
+    except Exception:
+        logger.exception("Workflow failed")
+        _user_error("Analysis failed. Check the image and API key, then try again.")
+    finally:
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
+
+
+def _patient_overrides():
+    return {
+        "age": int(st.session_state.get("patient_age") or 0),
+        "conditions": _parse_list(st.session_state.get("patient_conditions")),
+        "allergies": _parse_list(st.session_state.get("patient_allergies")),
+    }
+
+
+def _sync_ocr_from_upload(image_bytes: bytes, image_name: str):
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        st.session_state.ocr_sync_error = (
+            "A Gemini API key is required to read patient details from the prescription."
+        )
+        return
+    suffix = Path(image_name).suffix.lower()
+    mime_type = MIME_TYPES.get(suffix)
+    if suffix not in ALLOWED_SUFFIXES or not mime_type:
+        st.session_state.ocr_sync_error = "Unsupported image type. Upload a JPG, PNG, or WebP file."
+        return
+    if not image_bytes:
+        st.session_state.ocr_sync_error = "The uploaded file is empty."
+        return
+    try:
+        with st.spinner("Reading prescription text..."):
+            ocr_text = GeminiPrescriptionOCR(api_key=api_key).ocr_image(
+                image_bytes,
+                mime_type=mime_type,
+            )
+        st.session_state.ocr_text = ocr_text
+        extracted = None
+        try:
+            extracted = GeminiPrescriptionExtractor(api_key=api_key).extract_prescription(
+                ocr_text
+            )
+        except Exception:
+            logger.exception("Structured extract on upload failed; using OCR fallback")
+        fields = patient_fields_from_extraction(extracted, ocr_text)
+        if fields.get("age"):
+            st.session_state.patient_age = int(fields["age"])
+        if fields.get("conditions"):
+            st.session_state.patient_conditions = format_conditions(fields["conditions"])
+        st.session_state.ocr_sync_error = None
+    except Exception:
+        logger.exception("OCR sync failed")
+        st.session_state.ocr_sync_error = (
+            "Could not read patient details from this image yet. You can still enter them manually."
+        )
+
+
+def _render_findings(title: str, items: list):
+    if not items:
+        return
+    with st.expander(f"{title} ({len(items)})", expanded=True):
+        for item in items:
+            medicines = " ↔ ".join(str(name) for name in item.get("medicines") or [] if name)
+            st.markdown(
+                f"""
+                <div class="finding">
+                  <strong>{item.get("severity", "Review")}</strong>
+                  <div style="margin-top:0.25rem">{medicines}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.markdown(f"**Why:** {item.get('reason')}")
+            st.markdown(f"**Recommendation:** {item.get('recommendation')}")
+
+
+def main():
+    st.set_page_config(
+        page_title="Rx-Strategist",
+        page_icon="Rx",
+        layout="wide",
+        initial_sidebar_state="collapsed",
+    )
+    st.markdown(APP_CSS, unsafe_allow_html=True)
+    _init_state()
     st.markdown(
         """
-        <div class="hero">
-            <div class="rxmark">Rx</div>
-            <h1>Rx-Strategist</h1>
-            <p>Check a prescription against the patient profile before it reaches the pharmacy.
-               Every flag comes with the evidence behind it.</p>
-            <div class="flow">
-                <span>Read the prescription</span>
-                <span>Verify dose and interactions</span>
-                <span>Explain with evidence</span>
-            </div>
+        <div class="rx-header">
+          <div>
+            <div class="rx-brand">Rx-Strategist</div>
+            <div class="rx-sub">AI-assisted Prescription Safety Analysis</div>
+          </div>
+          <div class="rx-ready">System Status: Ready</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    st.write("")
-    c1, c2, c3 = st.columns(3)
-    c1.markdown("**Reads handwritten and printed prescriptions**  \nUpload a photo and the medicines, doses and frequencies are extracted.")
-    c2.markdown("**Rule-based safety verdict**  \nA deterministic verifier decides APPROPRIATE or REVIEW, so the result is repeatable.")
-    c3.markdown("**Knowledge graph and sources**  \nEach finding links to the drugs, conditions and documents that support it.")
-    st.write("")
-    _, mid, _ = st.columns([2, 1.2, 2])
-    mid.button("Start analysis", on_click=go, args=(1,), type="primary",
-               use_container_width=True, key="start")
-    st.caption("Final-year project  |  Your Name  |  Guide: Guide Name  |  Institution, 2026")
-    st.caption("Decision-support prototype. It does not replace a doctor or pharmacist.")
 
-
-def page_input():
-    st.header("Patient profile and prescription")
     left, right = st.columns(2, gap="large")
+    with right:
+        st.markdown('<div class="rx-card"><h3>Prescription</h3>', unsafe_allow_html=True)
+        upload = st.file_uploader(
+            "Upload Prescription",
+            type=["jpg", "jpeg", "png", "webp"],
+            accept_multiple_files=False,
+        )
+        st.markdown(
+            '<div class="rx-hint">Supported: JPG / PNG / WebP</div></div>',
+            unsafe_allow_html=True,
+        )
+
+    if upload is not None:
+        current_id = _file_id(upload)
+        upload_state = next_upload_state(st.session_state.file_id, current_id)
+        st.session_state.file_id = upload_state["file_id"]
+        st.session_state.image_bytes = upload.getvalue()
+        st.session_state.image_name = upload.name
+        if upload_state["invalidate_result"]:
+            st.session_state.result = None
+            st.session_state.view = None
+            st.session_state.error = None
+            st.session_state.ocr_synced_file_id = None
+            st.session_state.ocr_text = None
+            st.session_state.ocr_sync_error = None
+        if st.session_state.ocr_synced_file_id != st.session_state.file_id:
+            _sync_ocr_from_upload(st.session_state.image_bytes, st.session_state.image_name)
+            st.session_state.ocr_synced_file_id = st.session_state.file_id
+    else:
+        st.session_state.file_id = None
+        st.session_state.image_bytes = None
+        st.session_state.image_name = None
+        st.session_state.result = None
+        st.session_state.view = None
+        st.session_state.ocr_text = None
+        st.session_state.ocr_synced_file_id = None
 
     with left:
-        st.subheader("Patient profile")
-        age = st.number_input("Age", 0, 120, st.session_state.profile.get("age", 55))
-        conditions = st.text_input("Medical conditions",
-                                   st.session_state.profile.get("conditions", ""),
-                                   placeholder="e.g. hypertension, type 2 diabetes",
-                                   help="Separate conditions with commas.")
-        allergies = st.text_input("Known allergies",
-                                  st.session_state.profile.get("allergies", ""),
-                                  placeholder="e.g. penicillin (leave empty if none)")
+        st.markdown('<div class="rx-card"><h3>Patient Profile</h3>', unsafe_allow_html=True)
+        st.number_input("Age", min_value=0, max_value=120, step=1, key="patient_age")
+        st.text_input(
+            "Medical Conditions",
+            key="patient_conditions",
+            help="Comma-separated. Synced from OCR when the prescription is uploaded.",
+        )
+        st.text_input(
+            "Known Allergies",
+            key="patient_allergies",
+            help="Comma-separated. Matched against prescribed drug names.",
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    with right:
-        st.subheader("Prescription")
-        upload = st.file_uploader("Upload prescription", type=["jpg", "jpeg", "png", "webp"])
-        st.caption("Supported: JPG / PNG / WebP")
-        if upload:
-            st.image(upload, caption=upload.name, use_container_width=True)
+    if st.session_state.ocr_sync_error:
+        st.caption(st.session_state.ocr_sync_error)
 
-    st.write("")
-    if st.button("Analyze prescription", type="primary", use_container_width=True,
-                 disabled=upload is None, key="analyze"):
-        with st.spinner("Reading the prescription and running safety checks..."):
-            st.session_state.profile = {"age": age, "conditions": conditions, "allergies": allergies}
-            st.session_state.result = run_pipeline(
-                age, conditions, allergies, upload.getvalue(), upload.name
+    if st.session_state.image_bytes:
+        st.image(st.session_state.image_bytes, caption=st.session_state.image_name, use_container_width=True)
+
+    analyze = st.button("Analyze Prescription", type="primary", use_container_width=True)
+    if analyze:
+        if not st.session_state.image_bytes:
+            _user_error("Upload a prescription image before analyzing.")
+        else:
+            _analyze(
+                st.session_state.image_bytes,
+                st.session_state.image_name,
+                _patient_overrides(),
             )
-        go(2)
-        st.rerun()
-    if upload is None:
-        st.caption("Upload a prescription image to enable analysis.")
-    nav(next_disabled=st.session_state.result is None)
 
+    if st.session_state.error:
+        st.error(st.session_state.error)
 
-def page_results():
-    r = st.session_state.result
-    st.header("Prescription analysis")
-    if not r:
-        st.info("Run an analysis first. Go back and upload a prescription.")
-        nav(next_disabled=True)
+    view = st.session_state.view
+    if not view:
+        st.markdown(f'<div class="disclaimer">{DISCLAIMER}</div>', unsafe_allow_html=True)
         return
 
-    css = {"REVIEW": "review", "APPROPRIATE": "ok"}.get(r["status"], "alert")
+    status = view["status"]
     st.markdown(
-        f'<div class="banner {css}"><h3>{r["headline"]}</h3><p>{r["summary"]}</p></div>',
+        f"""
+        <div class="{status['css_class']}">
+          <div class="status-kicker">OVERALL SAFETY ASSESSMENT</div>
+          <p class="status-title">{status['label']}</p>
+          <p class="status-copy">{status['headline']}</p>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Medicines identified", len(r["medicines"]))
-    m2.metric("Potential interactions", len(r["interactions"]))
-    m3.metric("Patient risks", len(r["patient_risks"]))
-    m4.metric("Evidence items", len(r["evidence"]))
+    metrics = view["metrics"]
+    m1.metric("Medicines Identified", metrics["medicines"])
+    m2.metric("Potential Interactions", metrics["interactions"])
+    m3.metric("Patient Risks", metrics["patient_risks"])
+    m4.metric("Evidence Items", metrics["evidence"])
 
     st.subheader("Medicines")
-    st.dataframe(pd.DataFrame(r["medicines"]), use_container_width=True, hide_index=True)
+    st.dataframe(view["medicines"], use_container_width=True, hide_index=True)
 
-    st.subheader("Safety findings")
-    with st.expander(f"Drug-drug interactions ({len(r['interactions'])})", expanded=True):
-        if not r["interactions"]:
-            st.write("No interactions found.")
-        for it in r["interactions"]:
-            st.markdown(
-                f'<div class="finding"><b>{it["a"]} and {it["b"]}</b></div>', unsafe_allow_html=True
-            )
-            st.markdown(f"**Why:** {it['why']}")
-            st.markdown(f"**Recommendation:** {it['recommendation']}")
-    with st.expander(f"Patient risks ({len(r['patient_risks'])})"):
-        if not r["patient_risks"]:
-            st.write("No allergy, age or condition risks found.")
-        for risk in r["patient_risks"]:
-            st.write("- " + str(risk))
+    st.subheader("Safety Findings")
+    findings = view["findings"]
+    if not any(findings.values()):
+        st.info("No safety findings were reported by the current analysis.")
+    else:
+        _render_findings("Drug–Drug Interactions", findings["interactions"])
+        _render_findings("Indication Concerns", findings["indications"])
+        _render_findings("Dosage / Frequency Concerns", findings["dosage"])
+        _render_findings("Allergy Concerns", findings["allergies"])
 
-    st.subheader("Evidence")
-    for ev in r["evidence"]:
-        with st.expander(f"{ev['title']}  (relevance {ev['relevance']:.4f})"):
-            st.caption(f"Source: {ev['source']}")
-            st.write(ev["text"])
-    with st.expander("Extracted prescription text"):
-        st.code(r["extracted_text"], language=None)
+    st.subheader("Evidence & Knowledge")
+    if view["kg_lines"]:
+        st.caption("Knowledge graph relationships")
+        for line in view["kg_lines"]:
+            st.markdown(f'<div class="kg-line">{line}</div>', unsafe_allow_html=True)
+    if view["evidence"]:
+        for item in view["evidence"]:
+            score = item.get("score")
+            label = item["title"]
+            if score is not None:
+                label = f"{label}  ·  relevance {score}"
+            with st.expander(label):
+                st.caption(f"Evidence source: `{item['source']}`")
+                st.write(item["text"])
+    else:
+        st.caption("No retrieved evidence items.")
 
-    st.subheader("AI safety explanation")
-    st.write(r["explanation"])
-    nav("View knowledge graph")
+    with st.expander("Extracted Prescription Text", expanded=True):
+        ocr_left, ocr_right = st.columns(2, gap="large")
+        with ocr_left:
+            st.caption("OCR lines")
+            st.markdown(view.get("ocr_lines_markdown") or "_No OCR text was returned._")
+        with ocr_right:
+            st.caption("Parsed fields")
+            st.markdown(view.get("ocr_fields_markdown") or "_No parsed fields._")
 
+    st.subheader("AI Safety Explanation")
+    st.write(view["explanation_notes"] or "No explanation notes were returned by the final checker.")
+    st.caption(view["explanation_recap"])
 
-def build_dot(triples):
-    drugs, conds = set(), set()
-    for s, rel, o in triples:
-        if rel == "TREATS":
-            drugs.add(s.lower()); conds.add(o.lower())
-        elif rel == "INTERACTS_WITH":
-            drugs.update([s.lower(), o.lower()])
-
-    lines = ['digraph G {', 'rankdir=LR; bgcolor="transparent";',
-             'node [fontname="Helvetica", fontsize=12, style="filled,rounded", shape=box, penwidth=0];',
-             'edge [fontname="Helvetica", fontsize=10];']
-    for n in sorted(drugs):
-        lines.append(f'"{esc(n)}" [label="{esc(n.title())}", fillcolor="#1f4e79", fontcolor="white"];')
-    for n in sorted(conds - drugs):
-        lines.append(f'"{esc(n)}" [label="{esc(n)}", fillcolor="#dcefe9", fontcolor="#12304a"];')
-    for s, rel, o in triples:
-        if rel == "TREATS":
-            lines.append(f'"{esc(s.lower())}" -> "{esc(o.lower())}" [label="treats", color="#2f7d6b", fontcolor="#2f7d6b"];')
-        elif rel == "INTERACTS_WITH":
-            lines.append(f'"{esc(s.lower())}" -> "{esc(o.lower())}" [label="interacts with", dir=both, '
-                         f'style=dashed, color="#b83a2e", fontcolor="#b83a2e", penwidth=2];')
-    lines.append("}")
-    return "\n".join(lines)
-
-
-def page_graph():
-    r = st.session_state.result
-    st.header("Knowledge graph and interactions")
-    if not r:
-        st.info("Run an analysis first.")
-        nav(next_disabled=True)
-        return
-
-    st.markdown(
-        "Blue boxes are drugs, green boxes are conditions. "
-        "Green arrows show what a drug treats, the dashed red line marks an interaction."
+    st.subheader("Final Report")
+    report = build_markdown_report(view)
+    st.download_button(
+        "Download Report",
+        data=report,
+        file_name="rx_strategist_report.md",
+        mime="text/markdown",
     )
-    st.graphviz_chart(build_dot(r["graph"]), use_container_width=True)
-
-    st.subheader("All relationships")
-    df = pd.DataFrame(r["graph"], columns=["Subject", "Relationship", "Object"])
-    st.dataframe(df, use_container_width=True, hide_index=True)
-
-    # final report
-    p = st.session_state.profile
-    report = (
-        f"# Rx-Strategist Safety Report\n\nGenerated: {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC\n\n"
-        f"## Overall Assessment\n\n**{r['headline'].upper()}**\n\n{r['summary']}\n\n"
-        f"## Patient Profile\n\n- Age: {p.get('age')}\n- Conditions: {p.get('conditions') or 'None recorded'}\n"
-        f"- Allergies: {p.get('allergies') or 'None recorded'}\n\n"
-        f"## Medicines\n\n" + "\n".join(
-            f"- {m['Medicine']} {m['Dose']} {m['Frequency']} ({m['Verification']}, risk {m['Risk']})"
-            for m in r["medicines"]) +
-        "\n\n## Interactions\n\n" + ("\n".join(
-            f"- {i['a']} + {i['b']}: {i['why']}. {i['recommendation']}" for i in r["interactions"])
-            or "None") +
-        f"\n\n## Explanation\n\n{r['explanation']}\n"
-    )
-    st.subheader("Final report")
-    st.download_button("Download report", report, "rx_strategist_report.md", "text/markdown")
     with st.expander("Report preview"):
         st.markdown(report)
-    nav("Project overview")
+
+    st.markdown(f'<div class="disclaimer">{DISCLAIMER}</div>', unsafe_allow_html=True)
 
 
-def page_overview():
-    st.header("Project overview")
-    st.write(
-        "Prescription errors and missed drug interactions are a common cause of preventable harm. "
-        "Rx-Strategist reads a prescription image, checks it against the patient profile and a "
-        "knowledge base, and returns a safety verdict that a clinician can review and trace."
-    )
-
-    st.subheader("How it works")
-    a, b, c, d, e = st.columns(5)
-    a.markdown("**1. Read**  \nOCR extracts text from the prescription image.")
-    b.markdown("**2. Extract**  \nMedicines, doses and frequencies are structured.")
-    c.markdown("**3. Verify**  \nA deterministic engine checks doses, interactions and patient risks.")
-    d.markdown("**4. Retrieve**  \nRelevant evidence and graph relations are attached.")
-    e.markdown("**5. Explain**  \nAn AI summary restates the verdict in plain language.")
-
-    st.subheader("Technologies")
-    t1, t2, t3 = st.columns(3)
-    with t1:
-        st.markdown("**Interface**\n- Streamlit\n- Graphviz (graph view)\n- Pandas")
-    with t2:
-        st.markdown("**AI and retrieval**\n- Google Gemini API\n- Embedding-based retrieval\n- Knowledge graph (drug, condition, dosage relations)")
-    with t3:
-        st.markdown("**Engineering**\n- Python\n- Rule-based verifier\n- GitHub and Google Colab")
-
-    st.subheader("Limits and next steps")
-    st.markdown(
-        "- The knowledge base is a demo set, not a full clinical monograph.\n"
-        "- The AI explanation never overrides the verifier.\n"
-        "- Next: a larger drug database, more interaction types, multi-language prescriptions."
-    )
-    st.info("Decision-support prototype. A qualified clinician must confirm every result.")
-    st.write("")
-    st.button("Start a new analysis", on_click=lambda: (go(1), st.session_state.update(result=None)))
-    nav()
-
-
-# ----------------------------------------------------------------------------
-# 5. ROUTER
-# ----------------------------------------------------------------------------
-PAGES = [page_cover, page_input, page_results, page_graph, page_overview]
-
-if st.session_state.step > 0:
-    stepper()
-PAGES[st.session_state.step]()
+if __name__ == "__main__":
+    main()
